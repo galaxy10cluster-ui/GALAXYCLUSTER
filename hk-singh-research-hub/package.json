@@ -1,0 +1,21 @@
+{
+  "name": "hk-singh-research-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo for HK Singh Research Hub — Next.js frontend + Express/Postgres backend",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev": "npx concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "cd backend && npx prisma migrate dev --name init",
+    "db:seed": "cd backend && npm run seed",
+    "db:studio": "cd backend && npx prisma studio",
+    "db:setup": "npm run db:up && sleep 3 && npm run db:migrate && npm run db:seed",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "echo 'Backend uses Node.js directly — no build step needed'"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

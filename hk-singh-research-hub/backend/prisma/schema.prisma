@@ -1,0 +1,300 @@
+// HK Singh Research Hub — Database Schema
+// Run `npx prisma migrate dev --name init` after setting DATABASE_URL in .env
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────
+// CORE CONTENT TYPES
+// ──────────────────────────────────────────
+
+enum ContentType {
+  PAPER
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum DebateCategory {
+  SUPPORT
+  OPPOSITION
+  QUESTION
+  ALTERNATIVE_THEORY
+}
+
+enum SortMode {
+  NEWEST
+  TOP
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  name         String   @default("H K Singh")
+  email        String   @unique
+  passwordHash String
+  role         String   @default("Owner / Research Publisher")
+  createdAt    DateTime @default(now())
+  lastLoginAt  DateTime?
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  slug      String    @unique
+  papers    Paper[]
+  videos    Video[]
+  audios    Audio[]
+  documents Document[]
+  createdAt DateTime  @default(now())
+}
+
+model Tag {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  slug      String     @unique
+  papers    Paper[]    @relation("PaperTags")
+  videos    Video[]    @relation("VideoTags")
+  audios    Audio[]    @relation("AudioTags")
+  documents Document[] @relation("DocumentTags")
+}
+
+model Paper {
+  id              String     @id @default(uuid())
+  title           String
+  slug            String     @unique
+  description     String
+  abstract        String
+  fileUrl         String
+  thumbnailUrl    String?
+  publicationDate DateTime
+  authorName      String     @default("H K Singh")
+  category        Category?  @relation(fields: [categoryId], references: [id])
+  categoryId      String?
+  tags            Tag[]      @relation("PaperTags")
+  views           Int        @default(0)
+  downloads       Int        @default(0)
+  aiSummary       String?
+  debateRoom      DebateRoom?
+  bookmarks       Bookmark[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+model Video {
+  id           String      @id @default(uuid())
+  title        String
+  slug         String      @unique
+  description  String
+  fileUrl      String
+  thumbnailUrl String?
+  durationSec  Int?
+  category     Category?   @relation(fields: [categoryId], references: [id])
+  categoryId   String?
+  tags         Tag[]       @relation("VideoTags")
+  views        Int         @default(0)
+  likes        Int         @default(0)
+  transcript   String?
+  timestamps   VideoTimestamp[]
+  debateRoom   DebateRoom?
+  bookmarks    Bookmark[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model VideoTimestamp {
+  id        String   @id @default(uuid())
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId   String
+  timeSec   Int
+  note      String
+  createdAt DateTime @default(now())
+}
+
+model Audio {
+  id           String      @id @default(uuid())
+  title        String
+  slug         String      @unique
+  description  String
+  fileUrl      String
+  durationSec  Int?
+  category     Category?   @relation(fields: [categoryId], references: [id])
+  categoryId   String?
+  tags         Tag[]       @relation("AudioTags")
+  plays        Int         @default(0)
+  downloads    Int         @default(0)
+  transcript   String?
+  notes        AudioNote[]
+  debateRoom   DebateRoom?
+  bookmarks    Bookmark[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model AudioNote {
+  id        String   @id @default(uuid())
+  audio     Audio    @relation(fields: [audioId], references: [id], onDelete: Cascade)
+  audioId   String
+  timeSec   Int
+  note      String
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id           String      @id @default(uuid())
+  title        String
+  slug         String      @unique
+  description  String
+  fileUrl      String
+  fileType     String      // docx, txt, ppt, pdf
+  category     Category?   @relation(fields: [categoryId], references: [id])
+  categoryId   String?
+  tags         Tag[]       @relation("DocumentTags")
+  views        Int         @default(0)
+  downloads    Int         @default(0)
+  debateRoom   DebateRoom?
+  bookmarks    Bookmark[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+// ──────────────────────────────────────────
+// DEBATE ENGINE — one independent room per content item
+// ──────────────────────────────────────────
+
+model DebateRoom {
+  id         String      @id @default(uuid())
+  contentType ContentType
+  paper      Paper?      @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  paperId    String?     @unique
+  video      Video?      @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId    String?     @unique
+  audio      Audio?      @relation(fields: [audioId], references: [id], onDelete: Cascade)
+  audioId    String?     @unique
+  document   Document?   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String?     @unique
+  comments   Comment[]
+  participants DebateParticipant[]
+  createdAt  DateTime    @default(now())
+}
+
+model DebateParticipant {
+  id           String     @id @default(uuid())
+  debateRoom   DebateRoom @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  debateRoomId String
+  displayName  String
+  ipHash       String
+  joinedAt     DateTime   @default(now())
+  isBanned     Boolean    @default(false)
+
+  @@unique([debateRoomId, displayName])
+}
+
+model Comment {
+  id           String         @id @default(uuid())
+  debateRoom   DebateRoom     @relation(fields: [debateRoomId], references: [id], onDelete: Cascade)
+  debateRoomId String
+  authorName   String
+  ipHash       String
+  content      String
+  category     DebateCategory
+  parent       Comment?       @relation("Replies", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId     String?
+  replies      Comment[]      @relation("Replies")
+  upvotes      Int            @default(0)
+  downvotes    Int            @default(0)
+  isPinned     Boolean        @default(false)
+  isDeleted    Boolean        @default(false)
+  attachments  DebateUpload[]
+  mentions     String[]       @default([])
+  createdAt    DateTime       @default(now())
+}
+
+model DebateUpload {
+  id        String   @id @default(uuid())
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  commentId String
+  fileUrl   String
+  fileType  String   // video, audio, document
+  createdAt DateTime @default(now())
+}
+
+model BannedIp {
+  id        String   @id @default(uuid())
+  ipHash    String   @unique
+  reason    String?
+  bannedAt  DateTime @default(now())
+}
+
+// ──────────────────────────────────────────
+// USERS (lightweight — debate participation only, no signup required)
+// ──────────────────────────────────────────
+
+model Bookmark {
+  id         String    @id @default(uuid())
+  sessionId  String    // anonymous browser session id
+  paper      Paper?    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  paperId    String?
+  video      Video?    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  videoId    String?
+  audio      Audio?    @relation(fields: [audioId], references: [id], onDelete: Cascade)
+  audioId    String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String?
+  createdAt  DateTime  @default(now())
+}
+
+model NewsletterSubscriber {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  subscribedAt DateTime @default(now())
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+  isRead    Boolean  @default(false)
+}
+
+// ──────────────────────────────────────────
+// ANALYTICS
+// ──────────────────────────────────────────
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  eventType  String   // view, download, comment, debate_join
+  contentType ContentType?
+  contentId  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  message   String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ──────────────────────────────────────────
+// SITE SETTINGS (singleton row, editable from admin panel)
+// ──────────────────────────────────────────
+
+model SiteSettings {
+  id              String  @id @default("singleton")
+  siteName        String  @default("HK Singh Research Hub")
+  logoUrl         String?
+  primaryColor    String  @default("#00d4ff")
+  accentColor     String  @default("#ff6b35")
+  homepageHeroText String @default("Student | Analytical Thinker | Independent Theoretical Researcher")
+  sectionsEnabled Json    @default("{\"papers\":true,\"videos\":true,\"audio\":true,\"documents\":true}")
+}

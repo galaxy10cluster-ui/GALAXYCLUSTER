@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hk-singh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hksingh
+      POSTGRES_PASSWORD: hksingh_dev_password
+      POSTGRES_DB: hk_singh_research_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - hk_singh_pg_data:/var/lib/postgresql/data
+
+volumes:
+  hk_singh_pg_data:
